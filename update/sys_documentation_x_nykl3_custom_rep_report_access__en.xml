@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<record_update>
+    <sys_documentation element="" label="Report Access" language="en" table="x_nykl3_custom_rep_report_access">
+        <sys_documentation action="INSERT_OR_UPDATE">
+            <element/>
+            <help/>
+            <hint/>
+            <label>Report Access</label>
+            <language>en</language>
+            <name>x_nykl3_custom_rep_report_access</name>
+            <plural>Report Access</plural>
+            <sys_class_name>sys_documentation</sys_class_name>
+            <sys_created_by>GARGL</sys_created_by>
+            <sys_created_on>2018-04-20 13:58:11</sys_created_on>
+            <sys_customer_update>false</sys_customer_update>
+            <sys_id>a35e141613e197807864bb722244b0df</sys_id>
+            <sys_mod_count>0</sys_mod_count>
+            <sys_name>Report Access</sys_name>
+            <sys_package display_value="Custom Reports" source="x_nykl3_custom_rep">42709326131553807864bb722244b054</sys_package>
+            <sys_policy/>
+            <sys_replace_on_upgrade>false</sys_replace_on_upgrade>
+            <sys_scope display_value="Custom Reports">42709326131553807864bb722244b054</sys_scope>
+            <sys_update_name>sys_documentation_x_nykl3_custom_rep_report_access__en</sys_update_name>
+            <sys_updated_by>GARGL</sys_updated_by>
+            <sys_updated_on>2018-04-20 13:58:11</sys_updated_on>
+            <url/>
+            <url_target/>
+        </sys_documentation>
+    </sys_documentation>
+</record_update>

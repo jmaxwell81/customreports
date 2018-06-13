@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<record_update table="sys_script_include">
+    <sys_script_include action="INSERT_OR_UPDATE">
+        <access>package_private</access>
+        <active>true</active>
+        <api_name>x_nykl3_custom_rep.employeeActualReport</api_name>
+        <client_callable>false</client_callable>
+        <description>Employee Actual Report</description>
+        <name>employeeActualReport</name>
+        <script><![CDATA[var employeeActualReport = Class.create();
+employeeActualReport.prototype = {
+	initialize: function() {
+		this.cru = new customReportUtil();
+		},
+	
+	getEmployeeActualReport: function(isJSON, report, start, end) {
+		this.isJSON = isJSON;
+		this.start = new GlideDateTime(start.toString());
+		this.end = new GlideDateTime(end.toString());
+		
+		this.labels = report.labels.toString().split(',');
+		this.fields = report.fields.toString().split(',');
+		this.matchLabels = report.match_labels.toString().split(',');
+		this.mergeLabels = report.merge_labels.toString().split(',');		
+		
+		var orderBy = report.order_by? report.order_by.toString().split(','):'';
+		var table = report.table.toString();
+		var encodedQuery = report.query.toString();
+		encodedQuery += "^timesheet.week_start<="+this.end.getDate();
+		encodedQuery += "^timesheet.week_end>="+this.start.getDate();
+
+		var records = this.createRecords(table, encodedQuery, orderBy);
+		return { fields: this.fields, labels: this.labels, records: records };
+		
+	},
+	
+	createRecords: function(table, encodedQuery, orderBy) {
+		var gr = new GlideRecord(table);
+		if (encodedQuery) gr.addEncodedQuery(encodedQuery);
+		if (orderBy) for (var o in orderBy) gr.orderBy(orderBy[o]);
+		gr.query();
+		
+		var records = [];
+		while (gr.next()) {
+			this.addRow(records, gr);		
+		}
+		if (!this.isJSON) {
+			return this.cru.transform(records, this.labels);
+		}
+		return records;
+	},
+	
+	addRow: function (records, gr) {
+		var row = this.cru.getFieldsRow(gr, this.fields, this.labels);
+		row.HRS = this.cru.getTotal(gr, this.start, this.end);
+		var rowNum = this.cru.contains(records, row, this.matchLabels);
+		if (rowNum == -1)
+			records.push(row);
+		else
+			this.cru.merge(records, row, rowNum, this.mergeLabels);
+	},
+	
+	type: 'employeeActualReport'
+};]]></script>
+        <sys_class_name>sys_script_include</sys_class_name>
+        <sys_created_by>GARGL</sys_created_by>
+        <sys_created_on>2018-05-02 11:42:38</sys_created_on>
+        <sys_customer_update>true</sys_customer_update>
+        <sys_id>7beae506133dd3007864bb722244b00b</sys_id>
+        <sys_mod_count>29</sys_mod_count>
+        <sys_name>employeeActualReport</sys_name>
+        <sys_package display_value="Custom Reports" source="x_nykl3_custom_rep">42709326131553807864bb722244b054</sys_package>
+        <sys_policy>read</sys_policy>
+        <sys_replace_on_upgrade>false</sys_replace_on_upgrade>
+        <sys_scope display_value="Custom Reports">42709326131553807864bb722244b054</sys_scope>
+        <sys_update_name>sys_script_include_7beae506133dd3007864bb722244b00b</sys_update_name>
+        <sys_updated_by>GARGL</sys_updated_by>
+        <sys_updated_on>2018-05-11 18:25:47</sys_updated_on>
+    </sys_script_include>
+</record_update>

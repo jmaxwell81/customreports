@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<record_update table="sys_script_include">
+    <sys_script_include action="INSERT_OR_UPDATE">
+        <access>package_private</access>
+        <active>true</active>
+        <api_name>x_nykl3_custom_rep.resourceHoursByProjectReport</api_name>
+        <client_callable>false</client_callable>
+        <description/>
+        <name>resourceHoursByProjectReport</name>
+        <script><![CDATA[var resourceHoursByProjectReport = Class.create();
+resourceHoursByProjectReport.prototype = {
+	initialize: function() {
+		this.cru = new customReportUtil();
+		this.labels = [];
+		this.fields = [];
+	},
+	
+	getResourceHoursByProjectReport: function(isJSON, report, start, end, includeNonWorkTime, userType, userName, projectName, includeLunch) {
+		this.isJSON = isJSON;
+		this.start = new GlideDateTime(start.toString());
+		this.end = new GlideDateTime(end.toString());
+		this.includeNonWorkTime = includeNonWorkTime;
+
+		this.labels = report.labels.toString().split(',');
+		this.fields = report.fields.toString().split(',');
+
+		var orderBy = report.order_by? report.order_by.toString().split(','):'';
+		var table = report.table.toString();
+		var encodedQuery = "timesheet.week_start<="+this.end.getDate()+"^timesheet.week_end>="+this.start.getDate();
+		if (userType && userType != undefined)
+			encodedQuery += "^timesheet.employee_type="+userType;
+		if (userName && userName != undefined)
+			encodedQuery += "^timesheet.employee.user.nameLIKE"+userName;
+		if (projectName && projectName != undefined)
+			encodedQuery += "^project.nameLIKE"+projectName;
+		var records = this.createRecords(table, encodedQuery, orderBy);
+		
+		if (includeNonWorkTime == 'true' || includeLunch == 'true') {
+			table = 'x_nykl3_tenroxnbsa_non_work_time';
+			this.fields[0] = 'nwt.name';
+			orderBy = ['timesheet.employee', 'nwt.name', 'timesheet.week_start'];
+			if (projectName && projectName != undefined)
+				encodedQuery = encodedQuery.toString().replace("project.nameLIKE", "nwt.nameLIKE");
+			if (includeNonWorkTime == 'true' && includeLunch != 'true')
+				encodedQuery += "^nwt.name!=Lunch Break";
+			else if (includeNonWorkTime != 'true' && includeLunch == 'true')
+				encodedQuery += "^nwt.name=Lunch Break";
+			var nwtRecords = this.createRecords(table, encodedQuery, orderBy);
+			for (var r in nwtRecords)
+				records.push(nwtRecords[r]);
+			this.fields[0] = 'project.name';
+		}
+		
+		if (!this.isJSON) {
+			records = this.cru.transform(records, this.labels);
+		}
+
+		return { fields: this.fields, labels: this.labels, records: records };
+		
+	},
+	
+	createRecords: function(table, encodedQuery, orderBy) {
+		var gr = new GlideRecord(table);
+		if (encodedQuery) gr.addEncodedQuery(encodedQuery);
+		if (orderBy) for (var o in orderBy) gr.orderBy(orderBy[o]);
+		gr.query();
+		
+		var records = [];
+		while (gr.next()) {
+			this.addRows(records, gr, table);
+		}
+		return records;
+	},
+	
+	addRows: function (records, gr, table) {
+		var daysInWeek = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+		var row = {};
+		var weekStart = new GlideDateTime(gr.getElement('timesheet.week_start').toString());
+		if (!weekStart || weekStart === undefined || weekStart === '')
+			return;
+		for (var diw in daysInWeek) {
+			if (weekStart.compareTo(this.start) >=0 && weekStart.compareTo(this.end) <=0) {
+				row = this.cru.getFieldsRow(gr, this.fields, this.labels);
+				row.HRS = isNaN(parseFloat(gr.getValue(daysInWeek[diw]))) ? 0 : parseFloat(gr.getValue(daysInWeek[diw]));
+				row.Date = weekStart.getDate().toString();
+				if (gr.timesheet.employee_type == 'Employee')
+					row['Resource Type'] = gr.timesheet.employee_category;
+				if (row.HRS != 0)
+					records.push(row);
+			}
+			weekStart.addDaysUTC(1);
+		}
+	},
+	
+	type: 'resourceHoursByProjectReport'
+};]]></script>
+        <sys_class_name>sys_script_include</sys_class_name>
+        <sys_created_by>GARGL</sys_created_by>
+        <sys_created_on>2018-05-03 19:31:57</sys_created_on>
+        <sys_customer_update>true</sys_customer_update>
+        <sys_id>f7d0a42a13b517007864bb722244b0e8</sys_id>
+        <sys_mod_count>39</sys_mod_count>
+        <sys_name>resourceHoursByProjectReport</sys_name>
+        <sys_package display_value="Custom Reports" source="x_nykl3_custom_rep">42709326131553807864bb722244b054</sys_package>
+        <sys_policy>read</sys_policy>
+        <sys_replace_on_upgrade>false</sys_replace_on_upgrade>
+        <sys_scope display_value="Custom Reports">42709326131553807864bb722244b054</sys_scope>
+        <sys_update_name>sys_script_include_f7d0a42a13b517007864bb722244b0e8</sys_update_name>
+        <sys_updated_by>GARGL</sys_updated_by>
+        <sys_updated_on>2018-05-31 15:50:01</sys_updated_on>
+    </sys_script_include>
+</record_update>

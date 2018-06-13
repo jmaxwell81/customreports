@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<record_update table="sys_script_include">
+    <sys_script_include action="INSERT_OR_UPDATE">
+        <access>package_private</access>
+        <active>true</active>
+        <api_name>x_nykl3_custom_rep.NAITReport</api_name>
+        <client_callable>false</client_callable>
+        <description/>
+        <name>NAITReport</name>
+        <script><![CDATA[var NAITReport = Class.create();
+NAITReport.prototype = {
+	initialize: function() {
+		this.cru = new customReportUtil();
+	},
+	
+	getNAITReport: function(isJSON, report, start, end) {
+		this.isJSON = isJSON;
+		this.start = new GlideDateTime(start.toString());
+		this.end = new GlideDateTime(end.toString());
+
+		this.days = this.cru.getDays(start, end);
+		this.mergeLabels = (this.days + ',' + 'Total').split(',');
+		this.labels = (report.labels.toString() + ',' + this.days + ',' + 'Total' ).split(',');
+		this.fields = report.fields.toString().split(',');
+		this.matchLabels = report.match_labels.toString().split(',');
+		
+		var orderBy = report.order_by? report.order_by.toString().split(','):'';
+		var table = report.table.toString();
+		var encodedQuery = report.query? report.query.toString() : '';
+		encodedQuery += "^timesheet.week_start<="+this.end.getDate();
+		encodedQuery += "^timesheet.week_end>="+this.start.getDate();
+		
+		var records = this.createRecords(table, encodedQuery, orderBy);
+		return { fields: this.fields, labels: this.labels, records: records };
+		
+	},
+	
+	createRecords: function(table, encodedQuery, orderBy) {
+		var gr = new GlideRecord(table);
+		if (encodedQuery) gr.addEncodedQuery(encodedQuery);
+		if (orderBy) for (var o in orderBy) gr.orderBy(orderBy[o]);
+			gr.query();
+		
+		var records = [];
+		while (gr.next()) {
+			this.addRow(records, gr);
+		}
+		
+		if (!this.isJSON) {
+			return this.cru.transform(records, this.labels);
+		}
+		return records;
+	},
+	
+	addRow: function (records, gr) {
+		var row = this.cru.getFieldsRow(gr, this.fields, this.labels);
+		//row.Total = this.cru.getTotal(gr, this.start, this.end);
+		row.Total = 0;
+		for (var d in this.days) {
+			row[this.days[d]] = 0;
+		}
+		var weekStart = new GlideDateTime(gr.getElement('timesheet.week_start').toString());
+		if (!weekStart || weekStart === undefined || weekStart === '')
+			return row;
+		
+		var daysInWeek = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+		for (var diw in daysInWeek) {
+			if (weekStart.compareTo(this.start)>=0 && weekStart.compareTo(this.end)<=0) {
+				row[weekStart.getDate().toString()] = gr.getValue(daysInWeek[diw]);
+				row.Total = parseFloat(row.Total) + parseFloat(gr.getValue(daysInWeek[diw]));
+			}
+			weekStart.addDaysUTC(1);
+		}
+		var rowNum = this.cru.contains(records, row, this.matchLabels);
+		if (rowNum == -1)
+			records.push(row);
+		else
+			this.cru.merge(records, row, rowNum, this.mergeLabels);
+	},
+	
+	type: 'NAITReport'
+};]]></script>
+        <sys_class_name>sys_script_include</sys_class_name>
+        <sys_created_by>GARGL</sys_created_by>
+        <sys_created_on>2018-04-17 13:58:27</sys_created_on>
+        <sys_customer_update>true</sys_customer_update>
+        <sys_id>b1e0c1510fa1d7801416d23be1050ea7</sys_id>
+        <sys_mod_count>88</sys_mod_count>
+        <sys_name>NAITReport</sys_name>
+        <sys_package display_value="Custom Reports" source="x_nykl3_custom_rep">42709326131553807864bb722244b054</sys_package>
+        <sys_policy>read</sys_policy>
+        <sys_replace_on_upgrade>false</sys_replace_on_upgrade>
+        <sys_scope display_value="Custom Reports">42709326131553807864bb722244b054</sys_scope>
+        <sys_update_name>sys_script_include_b1e0c1510fa1d7801416d23be1050ea7</sys_update_name>
+        <sys_updated_by>GARGL</sys_updated_by>
+        <sys_updated_on>2018-05-14 16:54:57</sys_updated_on>
+    </sys_script_include>
+</record_update>

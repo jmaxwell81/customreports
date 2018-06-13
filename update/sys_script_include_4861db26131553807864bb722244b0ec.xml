@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<record_update table="sys_script_include">
+    <sys_script_include action="INSERT_OR_UPDATE">
+        <access>package_private</access>
+        <active>true</active>
+        <api_name>x_nykl3_custom_rep.customReportUtil</api_name>
+        <client_callable>false</client_callable>
+        <description/>
+        <name>customReportUtil</name>
+        <script><![CDATA[/**
+ * GQL (Glide Query Language) Class
+ *
+ * MIT License http://tldrlegal.com/l/mit
+ * Copyright (c) 2016 John.Chun @snowaid.com
+ */
+
+var customReportUtil = Class.create();
+customReportUtil.prototype = {
+	initialize: function(format) {
+		this.format = format || 'JSAN';  // { JSAN | JSON }
+	},
+	
+	getReports: function() {
+		var userID = gs.getUserID();
+		var snUtil = new global.NBSA_SNUtils();
+		gs.info('customReportUtil: getReports: gs.getUserID(): '+gs.getUserID());
+		
+		if (!userID || userID == '' || userID == undefined)
+			return;
+		
+		var encodedQuery = 'usersLIKE'+userID;
+		
+		snUtil.getA('sys_user_has_role', ['user='+userID], ['role']).forEach(function(r) {
+			encodedQuery += '^ORrolesLIKE'+r;			
+		});
+		
+		snUtil.getA('sys_user_grmember', ['user='+userID], ['group']).forEach(function(g) {
+			encodedQuery += '^ORgroupsLIKE'+g;			
+		});
+		
+		gs.info('customReportUtil: getReports: encodedQuery: '+encodedQuery);
+		
+		var rep = [];
+		snUtil.getO('x_nykl3_custom_rep_report_access', [], ['report_name', 'table', 'query', 'labels', 'fields', 'order_by', 'merge_labels', 'match_labels', 'mandatory_parameters', 'optional_parameters']).forEach(function(r) {
+			rep.push(r);
+		});
+		return {records: rep};
+	},
+	
+	getFieldsRow: function (gr, fields, labels) {
+		var row = {};
+		for (var i in fields) row[labels[i]] = gr.getElement(fields[i]).toString();
+		return row;
+	},
+	
+	getTotal: function(gr, start, end) {
+		var weekStart = new GlideDateTime(gr.getElement('timesheet.week_start').toString());
+		if (!weekStart || weekStart === undefined || weekStart === '')
+			return;
+		
+		var total=0;
+		['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].forEach(function(d) {
+			if (weekStart.compareTo(start) >=0 && weekStart.compareTo(end) <=0) {
+				total = isNaN(parseFloat(gr.getValue(d)))? total : parseFloat(total) + parseFloat(gr.getValue(d));
+			}
+			weekStart.addDaysUTC(1);
+		});
+		return total;
+	},
+
+	/*getDays: function(year, month) {
+		var gdt = new GlideDateTime();
+		gdt.setYearUTC(year);
+		gdt.setMonthUTC(month);
+		gdt.setDayOfMonthUTC('1');
+		var day = gdt.getDaysInMonthUTC();
+		var days = [];
+		days.push(gdt.getDate().toString());
+		for (var i=1; i<day; i++) {
+			gdt.addDaysUTC(1);
+			days.push(gdt.getDate().toString());
+		}
+		return days;
+	},*/
+	
+	getDays: function(s, e) {
+		var start = new GlideDateTime(s);
+		var end = new GlideDateTime(e);
+		var days = [];
+		days.push(start.getDate().toString());
+		while (end.compareTo(start)>0) {
+			start.addDaysUTC(1);
+			days.push(start.getDate().toString());
+		}
+		return days;
+	},
+
+	transform: function (records, labels) {
+		var transfromedRecords = [];
+		var record;
+		for (var rec in records) {
+			record = [];
+			for (var l in labels) {
+				record.push(records[rec][labels[l]]? records[rec][labels[l]] : '');
+			}
+			transfromedRecords.push(record);
+		}
+		return transfromedRecords;
+	},
+	
+	contains: function (records, row, matchLabels) {
+		var rowMatch = false;
+		for (var rec in records) {
+			rowMatch = true;
+			for (var fl in matchLabels) {
+				if (records[rec][matchLabels[fl]] != row[matchLabels[fl]]) {
+					rowMatch = false;
+					break;
+				}
+			}
+			if (rowMatch == true)
+				return rec;
+		}
+		return -1;
+	},
+	
+	/*
+ 	* This function will take a User Profile sys_id and Week Start (Date) as argument and will try to find an applicable bill rate for that week
+ 	* If found one, it will return the Rate
+ 	*/
+	getBillRate: function(consultant, weekStart) {
+		if (!weekStart || weekStart === undefined || weekStart === '')
+			return;
+		var ws = new GlideDateTime(weekStart);
+		var TABLE_BILL_RATE = 'x_nykl3_tenroxnbsa_bill_rate';
+		var snUtil = new global.NBSA_SNUtils();
+		var rates = snUtil.getO(TABLE_BILL_RATE, ['user='+consultant, 'effective_from_date<='+weekStart], ['effective_from_date', 'effective_till_date', 'rate']);
+		var etdgdt;
+		var rate = {};
+		if (rates.length > 0) {
+			for (var r in rates) {
+				if (rates[r].effective_till_date === undefined || rates[r].effective_till_date === '') {
+					if (rate.rate === undefined || rate.rate === '') {
+						rate.rate = rates[r].rate;
+						rate.effective_from_date = rates[r].effective_from_date;
+					}
+				} else {
+					etdgdt = new GlideDateTime(rates[r].effective_till_date.toString());
+					if (etdgdt.compareTo(ws)>=0) {
+						rate.rate = rates[r].rate;
+						rate.effective_from_date = rates[r].effective_from_date;
+					}
+				}
+			}
+		}
+		if (rate.rate === undefined || rate.rate === '') {
+			gs.info('No Applicable Bill Rate found for '+consultant.user.name+', for week: '+weekStart);
+			return;
+		}
+		return rate;
+	},
+	
+	/*
+ 	* This function will take a User Profile sys_id and a day (Date) as argument 
+	* and will try to find an applicable bill rate for that day
+ 	* If found one, it will return the Rate applicable for that day
+ 	*/
+	
+	getBillRateDay: function(consultant, day) {
+		if (!day || day === undefined || day === '')
+			return;
+		var daygdt = new GlideDateTime(day);
+		var TABLE_BILL_RATE = 'x_nykl3_tenroxnbsa_bill_rate';
+		var snUtil = new global.NBSA_SNUtils();
+		var rates = snUtil.getO(TABLE_BILL_RATE, ['user='+consultant, 'effective_from_date<='+daygdt.getDate()], ['effective_from_date', 'effective_till_date', 'rate']);
+		var etdgdt;
+		var rate = {};
+		if (rates.length > 0) {
+			for (var r in rates) {
+				if (rates[r].effective_till_date === undefined || rates[r].effective_till_date === '') {
+					if (rate.rate === undefined || rate.rate === '') {
+						rate.rate = rates[r].rate;
+						rate.effective_from_date = rates[r].effective_from_date;
+					}
+				} else {
+					etdgdt = new GlideDateTime(rates[r].effective_till_date.toString());
+					if (etdgdt.compareTo(daygdt)>=0) {
+						rate.rate = rates[r].rate;
+						rate.effective_from_date = rates[r].effective_from_date;
+					}
+				}
+			}
+		}
+		if (rate.rate === undefined || rate.rate === '') {
+			gs.info('No Applicable Bill Rate found for '+consultant.user.name+', for day: '+daygdt.getDate());
+			return;
+		}
+		return rate;
+	},
+	merge: function(records, row, rowNum, mergeLabels) {
+		mergeLabels.forEach(function(ml) {
+			records[rowNum][ml] = parseFloat(records[rowNum][ml]) + parseFloat(row[ml]);
+		});
+	},
+
+	type: 'customReportUtil'
+};]]></script>
+        <sys_class_name>sys_script_include</sys_class_name>
+        <sys_created_by>GARGL</sys_created_by>
+        <sys_created_on>2018-04-09 11:25:02</sys_created_on>
+        <sys_customer_update>true</sys_customer_update>
+        <sys_id>4861db26131553807864bb722244b0ec</sys_id>
+        <sys_mod_count>109</sys_mod_count>
+        <sys_name>customReportUtil</sys_name>
+        <sys_package display_value="Custom Reports" source="x_nykl3_custom_rep">42709326131553807864bb722244b054</sys_package>
+        <sys_policy>read</sys_policy>
+        <sys_replace_on_upgrade>false</sys_replace_on_upgrade>
+        <sys_scope display_value="Custom Reports">42709326131553807864bb722244b054</sys_scope>
+        <sys_update_name>sys_script_include_4861db26131553807864bb722244b0ec</sys_update_name>
+        <sys_updated_by>GARGL</sys_updated_by>
+        <sys_updated_on>2018-05-16 13:46:25</sys_updated_on>
+    </sys_script_include>
+</record_update>
